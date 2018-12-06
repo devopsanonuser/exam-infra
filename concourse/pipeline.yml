@@ -1,0 +1,85 @@
+jobs:
+- name: build
+  plan:
+   - aggregate:
+     - get: exam-app
+       trigger: true
+     - get: exam-infra
+
+   - task: mvn_build
+     file: exam-infra/concourse/java/task.yml
+     input_mapping: {source: exam-app}
+
+   - put: docker-image-exam-app
+     params:
+       build: jar-file
+
+
+- name: deploy-docker-image
+  plan:
+  - aggregate:
+    - get: exam-infra
+    - get: docker-image-exam-app
+      trigger: true
+      passed: [build]
+  - task: push_to_heroku
+    file: exam-infra/concourse/heroku/release_docker_image.yml
+    params:
+      heroku_email: ((heroku_email))
+      heroku_api_token: ((heroku_api_key))
+      app_name: ((heroku_app_name))
+      prefix: ((heroku_app_name_prefix))
+      graphite_apikey_ci: ((graphite_apikey_ci))
+      graphite_host_ci: ((graphite_host_ci))
+      graphite_apikey_stage: ((graphite_apikey_stage))
+      graphite_host_stage: ((graphite_host_stage))
+      graphite_apikey_prod: ((graphite_apikey_prod))
+      graphite_host_prod: ((graphite_host_prod))
+      logzio_token_ci: ((logzio_token_ci))
+      logzio_token_staging: ((logzio_token_staging))
+      logzio_token_prod: ((logzio_token_prod))
+
+- name: infra
+  plan:
+  - aggregate:
+    - get: exam-infra
+
+  - task: apply
+    file: exam-infra/concourse/terraform/task.yml
+    input_mapping: {source: exam-infra}
+    params:
+      github_token: ((github_token))
+      heroku_api_key: ((heroku_api_key))
+      statuscake_api_key: ((statuscake_api_key))
+      graphite_apikey_ci: ((graphite_apikey_ci))
+      graphite_host_ci: ((graphite_host_ci))
+      command: apply
+      directories: |
+          terraform
+
+  - put: exam-infra
+    params:
+      repository: with-state
+      rebase: true
+
+resources:
+- name: docker-image-exam-app
+  type: docker-image
+  source:
+    repository: registry.heroku.com/((heroku_app_name))/web
+    username: ((heroku_email))
+    password: ((heroku_api_key))
+
+- name: exam-app
+  type: git
+  source:
+      uri: git@github.com:devopsanonuser/exam-app.git
+      branch: master
+      private_key: ((deploy_key_app))
+
+- name: exam-infra
+  type: git
+  source:
+      uri: git@github.com:devopsanonuser/exam-infra.git
+      branch: master
+      private_key: ((deploy_key_infra))

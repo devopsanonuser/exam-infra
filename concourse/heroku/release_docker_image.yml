@@ -1,0 +1,52 @@
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: wingrunr21/alpine-heroku-cli
+    tag: "latest"
+
+params:
+    heroku_email:
+    heroku_api_token:
+    app_name:
+    prefix:
+    graphite_apikey_ci:
+    graphite_host_ci:
+    graphite_apikey_stage:
+    graphite_host_stage:
+    graphite_apikey_prod:
+    graphite_host_prod:
+    logzio_token_ci:
+    logzio_token_staging:
+    logzio_token_prod:
+
+run:
+  path: sh
+  dir: .
+  args:
+    - -exc
+    - |
+      cat > /root/.netrc <<EOF
+      machine api.heroku.com
+          login ${heroku_email}
+          password ${heroku_api_token}
+      machine git.heroku.com
+          login ${heroku_email}
+          password ${heroku_api_token}
+      EOF
+      export HEROKU_API_KEY=${heroku_api_token}
+
+      heroku config:set -a ${prefix}-ci LOGZIO_TOKEN=${logzio_token_ci}
+      heroku config:set -a ${prefix}-ci HOSTEDGRAPHITE_APIKEY=${graphite_apikey_ci}
+      heroku config:set -a ${prefix}-ci GRAPHITE_HOST=${graphite_host_ci}
+
+      heroku config:set -a ${prefix}-staging LOGZIO_TOKEN=${logzio_token_staging}
+      heroku config:set -a ${prefix}-staging HOSTEDGRAPHITE_APIKEY=${graphite_apikey_stage}
+      heroku config:set -a ${prefix}-staging GRAPHITE_HOST=${graphite_host_stage}
+
+      heroku config:set -a ${prefix}-production LOGZIO_TOKEN=${logzio_token_prod}
+      heroku config:set -a ${prefix}-production HOSTEDGRAPHITE_APIKEY=${graphite_apikey_prod}
+      heroku config:set -a ${prefix}-production GRAPHITE_HOST=${graphite_host_prod}
+
+      heroku container:release web -a ${app_name}
